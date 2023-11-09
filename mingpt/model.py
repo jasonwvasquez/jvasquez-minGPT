@@ -214,6 +214,7 @@ class GPT(nn.Module):
         config.model_type = model_type
         config.vocab_size = 50257  # openai's model vocabulary
         config.block_size = 1024  # openai's model block_size
+        config.checkpoint = None
         model = GPT(config)
         sd = model.state_dict()
         # discard this mask / buffer, not a param
