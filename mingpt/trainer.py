@@ -8,6 +8,7 @@ from collections import defaultdict
 
 import torch
 from torch.utils.data.dataloader import DataLoader
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
 from mingpt.utils import CfgNode as CN
 import numpy as np
 
@@ -60,6 +61,21 @@ class Trainer:
         for callback in self.callbacks.get(onevent, []):
             callback(self)
 
+    def prepare(self, batch):
+        text = batch['text']
+        tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+        tokenizer.pad_token_id = 50256
+        # Tokenize the text
+        tokens = tokenizer.encode(
+            text, add_special_tokens=True, max_length=1024, truncation=True, return_tensors='pt', padding=True)
+        # Split the tokens into chunks of max_length
+        # Shift the tokens to get targets (excluding the [CLS] token)
+        target_tokens = tokens[:, 1:].clone()  # Exclude the [CLS] token
+        # Exclude the last token to match the shifted targets
+        tokens = tokens[:, :-1]
+
+        return tokens, target_tokens
+
     def run(self):
         model, config = self.model, self.config
 
@@ -67,15 +83,6 @@ class Trainer:
         self.optimizer = model.configure_optimizers(config)
 
         # setup the dataloader
-        train_loader = DataLoader(
-            self.train_dataset,
-            sampler=torch.utils.data.RandomSampler(
-                self.train_dataset, replacement=True, num_samples=int(1e10)),
-            shuffle=False,
-            pin_memory=True,
-            batch_size=config.batch_size,
-            num_workers=config.num_workers,
-        )
 
         model.train()
         self.iter_num = model.iter_num if hasattr(
@@ -84,7 +91,7 @@ class Trainer:
         self.checkpoint_num = model.checkpoint_num if hasattr(
             model, 'checkpoint_num') else 0   # This is a change
         self.iter_time = time.time()
-        data_iter = iter(train_loader)
+        data_iter = iter(self.train_dataset)
 
         # Define loss
         self.loss = np.inf  # This is a change
@@ -94,12 +101,11 @@ class Trainer:
             try:
                 batch = next(data_iter)
             except StopIteration:
-                data_iter = iter(train_loader)
+                data_iter = iter(self.train_dataset)
                 batch = next(data_iter)
-            batch = [t.to(self.device) for t in batch]
-            x, y = batch
-            x = x.squeeze(0)
-            y = y.squeeze(0)
+            x, y = self.prepare(batch)
+            x = x.to(self.device)
+            y = y.to(self.device)
 
             prev_loss = self.loss
 

@@ -38,7 +38,7 @@ class RedPajamaDataset(Dataset):
 
 
 def batch_end_callback(trainer):
-    if trainer.iter_num % 100 == 0:
+    if trainer.iter_num % 10 == 0:
         print(
             f"iter_dt {trainer.iter_dt * 1000:.2f}ms; iter {trainer.iter_num}: train loss {trainer.loss.item():.5f}")
 
@@ -47,17 +47,19 @@ if __name__ == '__main__':
 
     # load in the dataset
     dataset = load_dataset(
-        "togethercomputer/RedPajama-Data-1T-Sample", 'plain_text', cache_dir='datasets')
+        "togethercomputer/RedPajama-Data-1T-Sample", 'plain_text', streaming=True)
     dataset = dataset['train']
     print('Loaded Dataset')
-    data = RedPajamaDataset(dataset)
-    print('Instatiated Dataset Class')
+    # data = RedPajamaDataset(dataset)
+    # print('Instatiated Dataset Class')
 
     # load in an instance of the model
+    # create a GPT instance
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     model_config = GPT.get_default_config()
     model_config.model_type = 'gpt-nano'
-    model_config.vocab_size = data.vocab_size
-    model_config.block_size = data.max_length - 1
+    model_config.vocab_size = tokenizer.vocab_size
+    model_config.block_size = 1023
     model_config.checkpoint = None
     model = GPT(model_config)
 
@@ -70,7 +72,7 @@ if __name__ == '__main__':
     train_config.num_workers = 0
     train_config.checkpoint_iters = 100     # This is a change
     train_config.batch_size = 1
-    trainer = Trainer(train_config, model, data)
+    trainer = Trainer(train_config, model, dataset)
 
     trainer.set_callback('on_batch_end', batch_end_callback)
     trainer.run()
