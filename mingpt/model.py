@@ -175,6 +175,7 @@ class GPT(nn.Module):
             self.lm_head.load_state_dict(self.checkpoint['model_lm_head'])
             self.iter_num = self.checkpoint['iter_num']
             self.checkpoint_num = self.checkpoint['checkpoint_num']
+            self.saved_loss = self.checkpoint['saved_loss']
 
         else:
             # init all weights, and apply a special scaled init to the residual projections, per GPT-2 paper

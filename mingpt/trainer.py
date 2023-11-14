@@ -83,15 +83,35 @@ class Trainer:
         self.optimizer = model.configure_optimizers(config)
 
         # setup the dataloader
+        train_loader = DataLoader(
+            self.train_dataset,
+            sampler=torch.utils.data.RandomSampler(
+                self.train_dataset, replacement=True, num_samples=int(1e10)),
+            shuffle=False,
+            pin_memory=True,
+            batch_size=config.batch_size,
+            num_workers=config.num_workers,
+        )
 
         model.train()
         self.iter_num = model.iter_num if hasattr(
             model, 'iter_num') else 0  # This is a change
+        self.iter_list = model.iter_list if hasattr(
+            model, 'iter_list') else []  # This is a change
         self.since_last_save = 0  # This is a change
         self.checkpoint_num = model.checkpoint_num if hasattr(
             model, 'checkpoint_num') else 0   # This is a change
         self.iter_time = time.time()
-        data_iter = iter(self.train_dataset)
+        self.saved_loss = model.saved_loss if hasattr(
+            model, 'saved_loss') else []  # This is a change
+        data_iter = iter(train_loader)
+        checkpoint_name = config.checkpoint_name if hasattr(
+            config, 'checkpoint_name') else 'checkpoint'  # This is a change
+
+        # Define loss
+        # This is a change
+        self.loss = self.saved_loss[-1] if self.saved_loss else np.inf
+        self.curr_loss = []
 
         # Define loss
         self.loss = np.inf  # This is a change
@@ -103,9 +123,10 @@ class Trainer:
             except StopIteration:
                 data_iter = iter(self.train_dataset)
                 batch = next(data_iter)
-            x, y = self.prepare(batch)
-            x = x.to(self.device)
-            y = y.to(self.device)
+            batch = [t.to(self.device) for t in batch]
+            x, y = batch
+            x = x.squeeze(0)  # This is a change.
+            y = y.squeeze(0)  # This is a change.
 
             prev_loss = self.loss
 
@@ -132,6 +153,7 @@ class Trainer:
             if self.loss <= prev_loss and self.since_last_save >= config.checkpoint_iters:
                 self.since_last_save = 0
 
+                self.saved_loss.append(self.loss)
                 # Create and save our checkpoint
                 checkpoint = {
                     'model_transformer': model.transformer.state_dict(),
@@ -140,6 +162,7 @@ class Trainer:
                     'loss': self.loss,
                     'iter_num': self.iter_num,
                     'checkpoint_num': self.checkpoint_num,
+                    'saved_loss': self.saved_loss,
                 }
                 torch.save(
                     checkpoint, f'checkpoints/checkpoint_{self.checkpoint_num}.pth')

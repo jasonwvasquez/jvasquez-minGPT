@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 from mingpt.trainer import Trainer
+import os
 set_seed(3407)
 
 # Custom dataset class for the Red Pajama dataset
@@ -50,17 +51,20 @@ if __name__ == '__main__':
         "togethercomputer/RedPajama-Data-1T-Sample", 'plain_text', streaming=True)
     dataset = dataset['train']
     print('Loaded Dataset')
-    # data = RedPajamaDataset(dataset)
-    # print('Instatiated Dataset Class')
+    data = RedPajamaDataset(dataset)
+    print('Instatiated Dataset Class')
 
     # load in an instance of the model
+    checkpoints = os.listdir('./checkpoints')
+    checkpoints.sort()
     # create a GPT instance
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     model_config = GPT.get_default_config()
-    model_config.model_type = 'gpt-nano'
-    model_config.vocab_size = tokenizer.vocab_size
+    model_config.model_type = 'gpt2'
+    model_config.vocab_size = data.vocab_size
     model_config.block_size = 1023
-    model_config.checkpoint = None
+    model_config.checkpoint = 'checkpoints/' + \
+        checkpoints[-1] if checkpoints else None  # This is a change
     model = GPT(model_config)
 
     # create a trainer object
@@ -72,7 +76,7 @@ if __name__ == '__main__':
     train_config.num_workers = 0
     train_config.checkpoint_iters = 100     # This is a change
     train_config.batch_size = 1
-    trainer = Trainer(train_config, model, dataset)
+    trainer = Trainer(train_config, model, data)
 
     trainer.set_callback('on_batch_end', batch_end_callback)
     trainer.run()
